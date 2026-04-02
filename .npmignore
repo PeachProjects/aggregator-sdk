@@ -1,0 +1,35 @@
+# Source files
+src/
+tests/
+examples/
+docs/
+
+# Config files
+*.config.ts
+*.config.js
+tsconfig*.json
+.env*
+.gitignore
+.gitbook.yaml
+version.mjs
+bun.lock
+
+# Build artifacts and dependencies
+node_modules/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Claude
+.claude/
+
+# Git
+.git/
+.gitattributes
+
+# Test coverage
+coverage/
