@@ -1,0 +1,498 @@
+openapi: 3.0.3
+info:
+  title: Peach Aggregator API
+  description: |
+    DEX aggregator API on BNB Smart Chain. Finds optimal swap routes across multiple DEX protocols
+    including PancakeSwap V2/V3, Pancake Infinity CL, UniswapV3/V4, DODO, and Thena.
+
+    ## Quick Start
+
+    ```typescript
+    import { PeachClient, BSC_MAINNET_CONFIG } from '@peachprojects/aggregator-sdk';
+
+    const client = new PeachClient(BSC_MAINNET_CONFIG);
+    const quote = await client.getQuote({
+      srcToken: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // BNB
+      dstToken: '0x55d398326f99059fF775485246999027B3197955', // USDT
+      amountIn: '1000000000000000000', // 1 BNB
+    });
+    ```
+
+    ## Response Envelope
+
+    All endpoints return responses wrapped in a common envelope:
+
+    ```json
+    {
+      "code": 200,
+      "msg": "success",
+      "data": { ... }
+    }
+    ```
+
+    - `code = 200` indicates success
+    - `code != 200` indicates an API-level error (check `msg` for details)
+  version: 0.1.1
+  contact:
+    name: Peach Projects
+    url: https://peach.ag
+  license:
+    name: MIT
+
+servers:
+  - url: https://api.peach.ag
+    description: Production
+
+tags:
+  - name: Router
+    description: Route discovery, quote retrieval, and service status
+    x-page-title: Router API
+    x-page-description: Endpoints for discovering optimal swap routes and checking service status.
+
+paths:
+  /router/find_routes:
+    get:
+      operationId: findRoutes
+      summary: Find optimal swap routes
+      description: |
+        Discovers the best swap route between two tokens. Returns optimized paths
+        across supported DEX protocols with price quotes, gas estimates, and
+        contract addresses needed for transaction building.
+      tags:
+        - Router
+      x-code-samples:
+        - lang: TypeScript
+          label: SDK
+          source: |
+            import { PeachClient, BSC_MAINNET_CONFIG } from '@peachprojects/aggregator-sdk';
+
+            const client = new PeachClient(BSC_MAINNET_CONFIG);
+
+            // Get a quote (calls /router/find_routes internally)
+            const quote = await client.getQuote({
+              srcToken: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+              dstToken: '0x55d398326f99059fF775485246999027B3197955',
+              amountIn: '1000000000000000000',
+              options: {
+                depth: 3,
+                splitCount: 20,
+                providers: ['PANCAKEV2', 'PANCAKEV3', 'UNISWAPV3'],
+              },
+            });
+
+            console.log('Amount out:', quote.amountOut.toString());
+        - lang: TypeScript
+          label: ApiClient
+          source: |
+            import { ApiClient } from '@peachprojects/aggregator-sdk';
+
+            const api = new ApiClient({ baseUrl: 'https://api.peach.ag' });
+
+            const routeData = await api.findRoutes({
+              from: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+              target: '0x55d398326f99059fF775485246999027B3197955',
+              amount: '1000000000000000000',
+            });
+
+            console.log('Routes found:', routeData.paths.length);
+        - lang: Shell
+          label: cURL
+          source: |
+            curl -X GET "https://api.peach.ag/router/find_routes?\
+            from=0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE&\
+            target=0x55d398326f99059fF775485246999027B3197955&\
+            amount=1000000000000000000&\
+            depth=3&\
+            split_count=20"
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: |
+            Input token contract address. Use `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
+            for native BNB.
+          schema:
+            type: string
+            example: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+        - name: target
+          in: query
+          required: true
+          description: |
+            Output token contract address. Use `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
+            for native BNB.
+          schema:
+            type: string
+            example: '0x55d398326f99059fF775485246999027B3197955'
+        - name: amount
+          in: query
+          required: true
+          description: Raw token amount as a string (in smallest unit, e.g. wei).
+          schema:
+            type: string
+            example: '1000000000000000000'
+        - name: by_amount_in
+          in: query
+          required: false
+          description: |
+            When `true` (default), the `amount` parameter is the input amount and the API
+            returns the expected output amount. When `false`, the `amount` is the desired
+            output amount and the API returns the required input.
+          schema:
+            type: boolean
+            default: true
+        - name: depth
+          in: query
+          required: false
+          description: Maximum number of hops in the route. Higher values find more complex routes but take longer.
+          schema:
+            type: integer
+            default: 3
+            minimum: 1
+            maximum: 5
+        - name: split_count
+          in: query
+          required: false
+          description: Number of trade splits for optimization. Higher values may find better prices.
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+        - name: providers
+          in: query
+          required: false
+          description: |
+            Comma-separated list of DEX providers to include.
+            Available providers: `PANCAKEV2`, `PANCAKEV3`, `PANCAKE_INFINITY_CL`,
+            `UNISWAPV3`, `UNISWAPV4`, `DODO`, `THENA`.
+            Defaults to all providers.
+          schema:
+            type: string
+            example: 'PANCAKEV2,PANCAKEV3,UNISWAPV3'
+        - name: v
+          in: query
+          required: false
+          description: Client version identifier.
+          schema:
+            type: integer
+            default: 1001500
+      responses:
+        '200':
+          description: Successful route discovery
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindRouteResponse'
+              example:
+                code: 200
+                msg: success
+                data:
+                  request_id: '550e8400-e29b-41d4-a716-446655440000'
+                  amount_in: '1000000000000000000'
+                  amount_out: '612345678901234567890'
+                  deviation_ratio: '0.001'
+                  paths:
+                    - pool: '0x172fcD41E0913e95784454560d5c68234CC5FACF'
+                      provider: PANCAKEV3
+                      adapter: '0x1234567890abcdef1234567890abcdef12345678'
+                      token_in: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
+                      token_out: '0x55d398326f99059fF775485246999027B3197955'
+                      direction: true
+                      fee_rate: '0.0005'
+                      amount_in: '1000000000000000000'
+                      amount_out: '612345678901234567890'
+                  contracts:
+                    router: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+                    adapters:
+                      PANCAKEV3: '0x1234567890abcdef1234567890abcdef12345678'
+                  gas: 250000
+
+  /router/status:
+    get:
+      operationId: getStatus
+      summary: Get service status
+      description: |
+        Returns the list of available DEX providers and the chainflow sync status
+        for each provider. Use this to check service health and data freshness.
+      tags:
+        - Router
+      x-code-samples:
+        - lang: TypeScript
+          label: SDK
+          source: |
+            import { PeachClient, BSC_MAINNET_CONFIG } from '@peachprojects/aggregator-sdk';
+
+            const client = new PeachClient(BSC_MAINNET_CONFIG);
+            const providers = await client.getAvailableProviders();
+            console.log('Available providers:', providers);
+        - lang: TypeScript
+          label: ApiClient
+          source: |
+            import { ApiClient } from '@peachprojects/aggregator-sdk';
+
+            const api = new ApiClient();
+            const status = await api.getStatus();
+
+            console.log('Providers:', status.providers);
+            for (const cf of status.chainflows) {
+              console.log(`${cf.provider}: block ${cf.version.latest_block_number}`);
+            }
+        - lang: Shell
+          label: cURL
+          source: |
+            curl -X GET "https://api.peach.ag/router/status"
+      responses:
+        '200':
+          description: Service status with provider availability and sync info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                code: 200
+                msg: success
+                data:
+                  providers:
+                    - PANCAKEV2
+                    - PANCAKEV3
+                    - PANCAKE_INFINITY_CL
+                    - UNISWAPV3
+                    - UNISWAPV4
+                    - DODO
+                    - THENA
+                  chainflows:
+                    - provider: PANCAKEV3
+                      tx_cursor: '0xabc123'
+                      version:
+                        latest_block_number: 48123456
+                        latest_transaction_index: 42
+                      update_at: 1712016000000
+
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      description: Common response envelope for all API responses.
+      properties:
+        code:
+          type: integer
+          description: '`200` indicates success; any other value indicates an API-level error.'
+          example: 200
+        msg:
+          type: string
+          description: Human-readable status message.
+          example: success
+      required:
+        - code
+        - msg
+
+    FindRouteResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FindRouteData'
+
+    FindRouteData:
+      type: object
+      description: Route discovery result with optimal paths, amounts, and contract addresses.
+      properties:
+        request_id:
+          type: string
+          description: Unique request identifier. Used internally by the SDK for quote tracking.
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        amount_in:
+          type: string
+          description: Total input amount (raw, in smallest unit).
+          example: '1000000000000000000'
+        amount_out:
+          type: string
+          description: Total output amount (raw, in smallest unit).
+          example: '612345678901234567890'
+        deviation_ratio:
+          type: string
+          description: Price deviation ratio indicating price impact.
+          example: '0.001'
+        paths:
+          type: array
+          description: Individual swap paths that make up the route.
+          items:
+            $ref: '#/components/schemas/RoutePath'
+        contracts:
+          $ref: '#/components/schemas/ContractAddresses'
+        gas:
+          type: integer
+          description: Estimated gas consumption for the swap.
+          example: 250000
+      required:
+        - request_id
+        - amount_in
+        - amount_out
+        - deviation_ratio
+        - paths
+        - contracts
+        - gas
+
+    RoutePath:
+      type: object
+      description: A single swap path through a specific liquidity pool.
+      properties:
+        pool:
+          type: string
+          description: Pool contract address.
+          example: '0x172fcD41E0913e95784454560d5c68234CC5FACF'
+        provider:
+          type: string
+          description: DEX provider name.
+          enum:
+            - PANCAKEV2
+            - PANCAKEV3
+            - PANCAKE_INFINITY_CL
+            - UNISWAPV3
+            - UNISWAPV4
+            - DODO
+            - THENA
+          example: PANCAKEV3
+        adapter:
+          type: string
+          description: Adapter contract address for this protocol.
+          example: '0x1234567890abcdef1234567890abcdef12345678'
+        token_in:
+          type: string
+          description: Input token address for this path segment.
+          example: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'
+        token_out:
+          type: string
+          description: Output token address for this path segment.
+          example: '0x55d398326f99059fF775485246999027B3197955'
+        direction:
+          type: boolean
+          description: '`true` = token0 to token1; `false` = token1 to token0.'
+          example: true
+        fee_rate:
+          type: string
+          description: 'Pool fee rate as a decimal string (e.g., `"0.0005"` = 0.05%).'
+          example: '0.0005'
+        amount_in:
+          type: string
+          description: Input amount for this path segment.
+          example: '1000000000000000000'
+        amount_out:
+          type: string
+          description: Output amount for this path segment.
+          example: '612345678901234567890'
+        extra_data:
+          type: string
+          nullable: true
+          description: Protocol-specific extra data (hex encoded). Used by adapters during execution.
+          example: '0x'
+      required:
+        - pool
+        - provider
+        - adapter
+        - token_in
+        - token_out
+        - direction
+        - fee_rate
+        - amount_in
+        - amount_out
+
+    ContractAddresses:
+      type: object
+      description: Contract addresses needed for transaction building.
+      properties:
+        router:
+          type: string
+          description: PeachAggregator router contract address. Use as the `to` address for swap transactions.
+          example: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
+        adapters:
+          type: object
+          description: 'Map of provider name to adapter contract address.'
+          additionalProperties:
+            type: string
+          example:
+            PANCAKEV3: '0x1234567890abcdef1234567890abcdef12345678'
+            PANCAKEV2: '0xabcdef1234567890abcdef1234567890abcdef12'
+      required:
+        - router
+        - adapters
+
+    StatusResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/StatusData'
+
+    StatusData:
+      type: object
+      description: Service status including available providers and sync state.
+      properties:
+        providers:
+          type: array
+          description: List of currently available DEX provider names.
+          items:
+            type: string
+            enum:
+              - PANCAKEV2
+              - PANCAKEV3
+              - PANCAKE_INFINITY_CL
+              - UNISWAPV3
+              - UNISWAPV4
+              - DODO
+              - THENA
+          example:
+            - PANCAKEV2
+            - PANCAKEV3
+            - PANCAKE_INFINITY_CL
+            - UNISWAPV3
+            - UNISWAPV4
+            - DODO
+            - THENA
+        chainflows:
+          type: array
+          description: Sync status for each provider's data pipeline.
+          items:
+            $ref: '#/components/schemas/ChainflowStatus'
+      required:
+        - providers
+        - chainflows
+
+    ChainflowStatus:
+      type: object
+      description: Data sync status for a single provider.
+      properties:
+        provider:
+          type: string
+          description: Provider name.
+          example: PANCAKEV3
+        tx_cursor:
+          type: string
+          nullable: true
+          description: Current sync transaction cursor. `null` if not yet synced.
+          example: '0xabc123'
+        version:
+          type: object
+          description: Sync version tracking.
+          properties:
+            latest_block_number:
+              type: integer
+              description: Latest synced block number on BSC.
+              example: 48123456
+            latest_transaction_index:
+              type: integer
+              description: Latest synced transaction index within the block.
+              example: 42
+          required:
+            - latest_block_number
+            - latest_transaction_index
+        update_at:
+          type: integer
+          description: Last update timestamp in milliseconds (Unix epoch).
+          example: 1712016000000
+      required:
+        - provider
+        - tx_cursor
+        - version
+        - update_at
